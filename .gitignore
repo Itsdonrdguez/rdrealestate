@@ -1,0 +1,29 @@
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Data
+/data/raw/
+/data/staging/
+/data/exports/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.pytest-tmp/
+.mypy_cache/
+
+# Node
+node_modules/
+.next/
+out/
+
+# Build / editor
+.DS_Store
+.vscode/
+.coverage
+htmlcov/
