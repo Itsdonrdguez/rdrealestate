@@ -14,7 +14,7 @@ from .fields import API_URL, SOURCE
 from .normalization import normalize_record
 from .raw_store import RawStore
 from .storage import store_record
-from .validation import RecordValidationError, validate_record
+from .validation import RecordValidationError, validate_page_schema, validate_record
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +38,23 @@ def run_pipeline(
     where: str | None = None,
     dry_run: bool = False,
     client=None,
+    resume_run_id: str | None = None,
+    min_free_bytes: int = 2_000_000_000,
 ) -> PipelineResult:
-    run_uuid = uuid.uuid4()
+    run_uuid = uuid.UUID(resume_run_id) if resume_run_id else uuid.uuid4()
     run_id = str(run_uuid)
-    raw_store = RawStore(raw_root, run_id)
+    raw_store = RawStore(raw_root, run_id, resume=bool(resume_run_id), min_free_bytes=min_free_bytes)
     seen = created = updated = failed = 0
+    cursor: str | None = None
+    next_page = 1
+    if resume_run_id:
+        checkpoint = raw_store.read_checkpoint()
+        cursor = str(checkpoint["cursor"]) if checkpoint.get("cursor") else None
+        next_page = int(checkpoint["next_page"])
+        seen = int(checkpoint["seen"])
+        created = int(checkpoint["created"])
+        updated = int(checkpoint["updated"])
+        failed = int(checkpoint["failed"])
     error_message: str | None = None
 
     sync_run: SyncRun | None = None
@@ -50,12 +62,19 @@ def run_pipeline(
         if session_factory is None:
             raise ValueError("session_factory is required unless dry_run is enabled")
         with session_factory.begin() as session:
-            sync_run = SyncRun(id=run_uuid, source=SOURCE, status="running")
-            session.add(sync_run)
+            sync_run = session.get(SyncRun, run_uuid)
+            if sync_run:
+                sync_run.status = "running"
+                sync_run.error = None
+                sync_run.finished_at = None
+            else:
+                sync_run = SyncRun(id=run_uuid, source=SOURCE, status="running")
+                session.add(sync_run)
 
     try:
         with MarylandSdatConnector(raw_store, app_token=app_token, client=client) as connector:
-            for page in connector.pages(limit=limit, where=where):
+            for page in connector.pages(limit=limit, where=where, cursor=cursor, page_number=next_page):
+                validate_page_schema(page.records)
                 validated = []
                 for raw in page.records:
                     seen += 1
@@ -69,9 +88,25 @@ def run_pipeline(
                     assert session_factory is not None
                     with session_factory.begin() as session:
                         for raw, normalized in validated:
-                            _, was_created = store_record(session, raw, normalized)
+                            _, was_created = store_record(
+                                session,
+                                raw,
+                                normalized,
+                                sync_run_id=run_uuid,
+                                raw_file_path=str(page.raw_page.path),
+                            )
                             created += int(was_created)
                             updated += int(not was_created)
+                raw_store.write_checkpoint(
+                    {
+                        "cursor": page.cursor,
+                        "next_page": int(page.raw_page.path.stem.split("-")[-1]) + 1,
+                        "seen": seen,
+                        "created": created,
+                        "updated": updated,
+                        "failed": failed,
+                    }
+                )
         raw_store.write_manifest(source_url=API_URL)
         status = "succeeded" if failed == 0 else "completed_with_errors"
     except Exception as error:

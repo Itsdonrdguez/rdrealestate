@@ -74,7 +74,7 @@ Foundation only.
 - Docker startup
 - docs and architecture guardrails
 
-### Milestone 2 (in progress)
+### Milestone 2 (public property backbone complete)
 Maryland connector and ingestion.
 Required behavior:
 - download from official Maryland data sources via API
@@ -196,6 +196,8 @@ To stop the stack:
 - [stop-local.bat](stop-local.bat)
 
 Stopping the stack preserves the PostgreSQL volume. To deliberately remove local database data, run `docker compose down -v` manually.
+
+Before using real data, create a verified database backup with `scripts/backup-db.ps1` and rotate the generated local credentials with `scripts/rotate-local-secrets.ps1`. Both scripts keep secrets and database archives outside Git.
 
 ## Important design principles
 - Raw source data is preserved, never overwritten.

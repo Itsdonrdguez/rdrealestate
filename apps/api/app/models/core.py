@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DateTime, Float, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func
+from geoalchemy2 import Geometry
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +23,7 @@ class ProvenanceMixin:
     source: Mapped[str] = mapped_column(String(80), nullable=False)
     source_identifier: Mapped[str] = mapped_column(String(200), nullable=False)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source_record_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("source_records.id"), nullable=True)
 
 
 class Property(Base, TimestampMixin, ProvenanceMixin):
@@ -48,7 +50,10 @@ class Property(Base, TimestampMixin, ProvenanceMixin):
 
 class Address(Base, TimestampMixin, ProvenanceMixin):
     __tablename__ = "addresses"
-    __table_args__ = (Index("ix_addresses_normalized_address", "normalized_address"),)
+    __table_args__ = (
+        Index("ix_addresses_normalized_address", "normalized_address"),
+        Index("ix_addresses_location", "location", postgresql_using="gist"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     raw_address: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -62,19 +67,29 @@ class Address(Base, TimestampMixin, ProvenanceMixin):
     postal_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location: Mapped[object | None] = mapped_column(Geometry("POINT", srid=4326, spatial_index=False), nullable=True)
 
     properties: Mapped[list[Property]] = relationship(back_populates="address")
 
 
 class Owner(Base, TimestampMixin, ProvenanceMixin):
     __tablename__ = "owners"
-    __table_args__ = (Index("ix_owners_normalized_name", "normalized_name"),)
+    __table_args__ = (
+        Index("ix_owners_normalized_name", "normalized_name"),
+        Index("ix_owners_name_mailing", "normalized_name", "normalized_mailing_address"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     raw_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     normalized_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    entity_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    raw_mailing_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalized_mailing_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     mailing_city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     mailing_state: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    mailing_postal_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    resolution_status: Mapped[str] = mapped_column(String(30), default="unresolved", nullable=False)
+    resolution_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_absentee: Mapped[bool | None] = mapped_column(nullable=True)
     portfolio_count: Mapped[int | None] = mapped_column(nullable=True)
 
@@ -90,6 +105,9 @@ class PropertyOwnership(Base, TimestampMixin, ProvenanceMixin):
     owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("owners.id"), nullable=False)
     acquired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     acquired_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    ownership_percentage: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    match_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    match_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_current: Mapped[bool] = mapped_column(default=True, nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -150,6 +168,8 @@ class SourceRecord(Base, TimestampMixin):
     record_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     raw_payload: Mapped[str] = mapped_column(Text, nullable=False)
+    raw_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sync_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sync_runs.id"), nullable=True)
 
 
 class SyncRun(Base, TimestampMixin):

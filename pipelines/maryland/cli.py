@@ -23,6 +23,8 @@ def main() -> None:
     parser.add_argument("--where", help="Optional Socrata SoQL filter")
     parser.add_argument("--dry-run", action="store_true", help="Extract, preserve, validate, and normalize only")
     parser.add_argument("--raw-root", type=Path, default=Path("data/raw"))
+    parser.add_argument("--resume", metavar="RUN_ID", help="Resume from an existing run checkpoint")
+    parser.add_argument("--min-free-gb", type=float, default=2.0, help="Reserved free disk space")
     args = parser.parse_args()
     configure_logging(settings.log_level)
     result = run_pipeline(
@@ -32,6 +34,8 @@ def main() -> None:
         limit=None if args.all else args.limit,
         where=args.where,
         dry_run=args.dry_run,
+        resume_run_id=args.resume,
+        min_free_bytes=int(args.min_free_gb * 1_000_000_000),
     )
     print(result)
 

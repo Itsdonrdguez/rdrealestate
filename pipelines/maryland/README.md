@@ -27,4 +27,6 @@ python -m pipelines.maryland.cli --dry-run --limit 10
 
 This contacts Maryland Open Data and writes immutable raw pages, but does not touch PostgreSQL. Remove `--dry-run` only after inspecting the raw files and validation output. Full-state ingestion requires the explicit `--all` flag.
 
+Long runs use Maryland account-ID keyset pagination and write `checkpoint.json` after each committed page. Resume an interrupted run with `--resume <run UUID>`. Requests retry rate limits and transient network/server failures with bounded exponential backoff. The loader reserves 2 GB of free disk by default; change the guard explicitly with `--min-free-gb`.
+
 An optional `MARYLAND_APP_TOKEN` can be provided through `.env` for higher Socrata rate limits. No token is required for small public samples.

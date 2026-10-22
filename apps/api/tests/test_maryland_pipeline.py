@@ -9,7 +9,7 @@ from pipelines.maryland.connector import MarylandSdatConnector
 from pipelines.maryland.normalization import normalize_record
 from pipelines.maryland.pipeline import run_pipeline
 from pipelines.maryland.raw_store import RawStore
-from pipelines.maryland.validation import RecordValidationError, validate_record
+from pipelines.maryland.validation import RecordValidationError, SchemaDriftError, validate_page_schema, validate_record
 
 
 @pytest.fixture
@@ -45,6 +45,27 @@ def test_validation_reports_missing_source_identity() -> None:
     assert fields.ACCOUNT_ID in str(error.value)
 
 
+def test_schema_drift_stops_a_page_before_storage() -> None:
+    with pytest.raises(SchemaDriftError):
+        validate_page_schema([{fields.ACCOUNT_ID: "one"}])
+
+
+def test_connector_uses_keyset_cursor(tmp_path, maryland_record: dict[str, object]) -> None:
+    requests: list[httpx.Request] = []
+    first = {**maryland_record, fields.ACCOUNT_ID: "10"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        body = [first] if len(requests) == 1 else []
+        return httpx.Response(200, json=body)
+
+    store = RawStore(tmp_path, "keyset")
+    connector = MarylandSdatConnector(store, client=httpx.Client(transport=httpx.MockTransport(handler)), page_size=1)
+    pages = list(connector.pages())
+    assert pages[0].cursor == "10"
+    assert f"{fields.ACCOUNT_ID} > '10'" in requests[1].url.params["$where"]
+
+
 def test_normalization_does_not_mutate_raw_record(maryland_record: dict[str, object]) -> None:
     before = maryland_record.copy()
     normalized = normalize_record(maryland_record)
@@ -60,7 +81,7 @@ def test_connector_preserves_exact_response_bytes(tmp_path, maryland_record: dic
     content = json.dumps([maryland_record], separators=(", ", ": ")).encode()
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.params["$order"] == ":id"
+        assert request.url.params["$order"] == f"{fields.ACCOUNT_ID} ASC"
         return httpx.Response(200, content=content, headers={"content-type": "application/json"})
 
     raw_store = RawStore(tmp_path, "test-run")

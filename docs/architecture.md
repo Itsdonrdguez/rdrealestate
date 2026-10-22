@@ -30,4 +30,10 @@ This keeps Maryland, RentCast, and future connectors modular while preserving ra
 The application is owner-centric. Its eventual job is to connect properties to owners and entities, show portfolio and ownership history, combine government and selectively purchased enrichment data, and produce explainable acquisition-opportunity signals. Maryland is the first source implementation, not a permanent boundary in the core schema.
 
 ## Foundation boundary
-Milestone 1 contains schema, provenance, raw-record storage, migrations, configuration, structured logging, health checks, and local containers. Maryland extraction, normalization, entity resolution, commercial enrichment, scoring, and full user-interface work remain later milestones. This keeps the data contract reviewable before records are ingested.
+Milestone 1 contains schema, provenance, raw-record storage, migrations, configuration, structured logging, health checks, and local containers. The public Maryland property backbone is now implemented; licensed owner ingestion, broader entity resolution, commercial enrichment, scoring, and full user-interface work remain later milestones.
+
+## Maryland ingestion reliability
+The public Maryland loader uses stable account-ID keyset pagination, bounded retry/backoff, append-only raw pages, atomic checkpoints, page-level schema validation before canonical writes, and a free-disk reserve. A normalized fact links back to its `source_records` evidence row and sync run. Interrupted runs resume from their last committed account ID.
+
+## Owner resolution boundary
+Public Maryland data hides owner names. The owner schema supports raw and normalized mailing addresses, entity type, resolution status, confidence, and ownership match metadata, but no owner records are fabricated. Automatic matching is limited to exact normalized name plus exact normalized mailing address. Name-only matches remain review candidates.

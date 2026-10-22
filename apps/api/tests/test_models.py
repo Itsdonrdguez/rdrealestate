@@ -3,7 +3,7 @@ from decimal import Decimal
 from sqlalchemy import Numeric, UniqueConstraint
 
 from app.db.base import Base
-from app.models import Assessment, ExternalIdentifier, Property, Sale, SourceRecord
+from app.models import Address, Assessment, ExternalIdentifier, Owner, Property, PropertyOwnership, Sale, SourceRecord
 
 
 def test_foundational_tables_are_registered() -> None:
@@ -24,6 +24,15 @@ def test_imported_entities_require_provenance() -> None:
     for model in (Property, Assessment, Sale):
         for name in ("source", "source_identifier", "observed_at"):
             assert model.__table__.c[name].nullable is False
+        assert "source_record_id" in model.__table__.c
+
+
+def test_owner_resolution_and_spatial_fields_exist() -> None:
+    assert "location" in Address.__table__.c
+    assert "normalized_mailing_address" in Owner.__table__.c
+    assert "resolution_status" in Owner.__table__.c
+    assert "ownership_percentage" in PropertyOwnership.__table__.c
+    assert "match_confidence" in PropertyOwnership.__table__.c
 
 
 def test_money_columns_are_fixed_precision() -> None:

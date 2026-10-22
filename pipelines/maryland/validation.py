@@ -14,6 +14,19 @@ class RecordValidationError(ValueError):
         return f"record {self.source_identifier or '<unknown>'}: {'; '.join(self.errors)}"
 
 
+class SchemaDriftError(ValueError):
+    pass
+
+
+def validate_page_schema(records: list[dict[str, object]]) -> None:
+    if not records:
+        return
+    available = set().union(*(record.keys() for record in records))
+    missing = set(REQUIRED_FIELDS) - available
+    if missing:
+        raise SchemaDriftError(f"Maryland source schema is missing required fields: {sorted(missing)}")
+
+
 def validate_record(record: dict[str, object]) -> None:
     errors = tuple(f"missing required field: {field}" for field in REQUIRED_FIELDS if not record.get(field))
     if errors:
