@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from sqlalchemy import DateTime, Float, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func
 from geoalchemy2 import Geometry
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -184,4 +184,14 @@ class SyncRun(Base, TimestampMixin):
     records_created: Mapped[int] = mapped_column(default=0, nullable=False)
     records_updated: Mapped[int] = mapped_column(default=0, nullable=False)
     records_failed: Mapped[int] = mapped_column(default=0, nullable=False)
+    records_validated: Mapped[int] = mapped_column(default=0, nullable=False)
+    records_skipped: Mapped[int] = mapped_column(default=0, nullable=False)
+    pages_fetched: Mapped[int] = mapped_column(default=0, nullable=False)
+    api_retries: Mapped[int] = mapped_column(default=0, nullable=False)
+    rate_limits: Mapped[int] = mapped_column(default=0, nullable=False)
+    server_errors: Mapped[int] = mapped_column(default=0, nullable=False)
+    raw_bytes: Mapped[int] = mapped_column(default=0, nullable=False)
+    checkpoint_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    elapsed_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    metrics: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

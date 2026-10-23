@@ -100,3 +100,23 @@ def test_dry_run_extracts_validates_and_writes_manifest(tmp_path, maryland_recor
     assert result.failed == 0
     assert (result.raw_directory / "page-000001.json").read_bytes() == content
     assert (result.raw_directory / "manifest.json").exists()
+
+
+def test_controlled_pause_records_checkpoint_metrics(tmp_path, maryland_record: dict[str, object]) -> None:
+    content = json.dumps([maryland_record]).encode()
+    client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, content=content)))
+    result = run_pipeline(None, raw_root=tmp_path, dry_run=True, client=client, max_pages=1, county="Charles")
+    checkpoint = json.loads((result.raw_directory / "checkpoint.json").read_text())
+    assert result.metrics["status"] == "paused"
+    assert result.metrics["pages_fetched"] == 1
+    assert checkpoint["checkpoint_count"] == 1
+
+
+def test_connector_counts_recoverable_server_retry(tmp_path, maryland_record: dict[str, object], monkeypatch) -> None:
+    responses = iter([httpx.Response(500), httpx.Response(200, json=[maryland_record])])
+    client = httpx.Client(transport=httpx.MockTransport(lambda _: next(responses)))
+    monkeypatch.setattr("pipelines.maryland.connector.time.sleep", lambda _: None)
+    connector = MarylandSdatConnector(RawStore(tmp_path, "retry"), client=client)
+    next(connector.pages(limit=1))
+    assert connector.stats.retries == 1
+    assert connector.stats.server_errors == 1

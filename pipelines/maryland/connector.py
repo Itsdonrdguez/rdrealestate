@@ -11,6 +11,14 @@ from .fields import ACCOUNT_ID, API_URL
 from .raw_store import RawPage, RawStore
 
 
+@dataclass
+class ConnectorStats:
+    pages_fetched: int = 0
+    retries: int = 0
+    rate_limits: int = 0
+    server_errors: int = 0
+
+
 @dataclass(frozen=True)
 class ExtractedPage:
     records: list[dict[str, object]]
@@ -33,6 +41,7 @@ class MarylandSdatConnector:
         self.raw_store = raw_store
         self.page_size = page_size
         self.max_retries = max_retries
+        self.stats = ConnectorStats()
         headers = {"X-App-Token": app_token} if app_token else {}
         self.client = client or httpx.Client(headers=headers, timeout=60.0)
         self._owns_client = client is None
@@ -58,6 +67,7 @@ class MarylandSdatConnector:
             if filters:
                 params["$where"] = " AND ".join(filters)
             response = self._get(params)
+            self.stats.pages_fetched += 1
             records = json.loads(response.content)
             if not isinstance(records, list):
                 raise ValueError("Maryland API response must be a JSON array")
@@ -82,11 +92,15 @@ class MarylandSdatConnector:
                 if attempt >= self.max_retries:
                     raise
                 time.sleep(min(0.5 * (2**attempt), 8.0))
+                self.stats.retries += 1
                 continue
             if response.status_code == 429 or response.status_code >= 500:
+                self.stats.rate_limits += int(response.status_code == 429)
+                self.stats.server_errors += int(response.status_code >= 500)
                 if attempt >= self.max_retries:
                     response.raise_for_status()
                 time.sleep(min(0.5 * (2**attempt), 8.0))
+                self.stats.retries += 1
                 continue
             response.raise_for_status()
             return response

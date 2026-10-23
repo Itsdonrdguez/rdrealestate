@@ -37,7 +37,7 @@ The property profile should show:
 - opportunity score with explainable factors
 
 ## Current status: where we are
-This repository contains the implemented Milestone 1 foundation. The schema and migration must be reviewed before Milestone 2 begins.
+The foundation and public Maryland ingestion engine are complete through baseline commit `e7748ae`. The Charles County capacity, recovery, and data-quality pilot is complete; see [the pilot report](docs/pilots/charles-county-2026-10-22.md). Accurate owner intelligence remains blocked on obtaining an authorized owner-name source.
 
 Completed:
 - monorepo structure
@@ -51,12 +51,17 @@ Completed:
 - health check endpoint and basic tests
 - .env handling and local startup scripts
 - README and AGENTS instructions for Codex guardrails
+- official Maryland public-data connector, validation, normalization, and canonical upserts
+- append-only raw snapshots and source-record lineage
+- checkpoint/resume ingestion with sync-run tracking
+- PostGIS property geometry
+- conservative owner-resolution fields and matching foundation
+- Charles County checkpoint/recovery and capacity benchmark
 
-Not started yet:
-- Maryland connector and raw ingestion
-- data validation and normalization layer
-- matching / deduplication across records
-- owner resolution and portfolio aggregation
+Next / blocked:
+- increase statewide storage headroom and optimize canonical upsert throughput (next)
+- authorized Maryland owner-name data acquisition (blocks meaningful owner intelligence)
+- owner portfolio aggregation after owner-name access
 - RentCast enrichment and queueing
 - Search / filter API
 - Opportunity scoring engine
@@ -66,7 +71,7 @@ Not started yet:
 ## Codex handoff plan
 Codex should continue in controlled milestones instead of trying to build everything at once.
 
-### Milestone 1 (implemented; awaiting schema approval)
+### Milestone 1 (complete)
 Foundation only.
 - app and repo layout
 - DB schema foundation
@@ -84,6 +89,13 @@ Required behavior:
 - match to existing canonical properties
 - upsert into PostgreSQL
 - write sync logs and structured status output
+
+### County ingestion pilot (complete)
+- preflight host, Docker, PostgreSQL, and raw-data capacity
+- benchmark Charles County throughput and storage
+- deliberately pause and resume from a checkpoint
+- verify canonical and provenance records are not duplicated
+- project statewide runtime and storage before a scale test in Prince George's County
 
 ### Milestone 3
 Owner resolution + portfolio aggregation.
@@ -216,24 +228,4 @@ For a fast local start on Windows:
 ## Copilot / Codex handoff prompt
 Use this as the next prompt for the next coding session:
 
-"Build Milestone 2 for the property intelligence project.
-
-We already have the foundation in place: monorepo, FastAPI app, SQLAlchemy models, Alembic skeleton, Docker Compose stack, and initial health endpoint.
-
-Now implement the Maryland connector and ingestion pipeline in a way that respects the project's rules:
-- preserve raw source data exactly as received
-- use separate normalized representations for owner names and addresses
-- keep source provenance on every imported fact
-- use UUIDs for internal IDs and support multiple external IDs per property
-- handle sync runs and structured logging
-- do not build RentCast, scoring, maps, or UI before the Maryland ingestion foundation is working
-
-Requirements:
-1. create the `pipelines/maryland` package with connector, validation, normalization, and storage modules
-2. add a local raw-data staging pattern for Maryland API records
-3. validate schema and record counts before writing into canonical tables
-4. map Maryland records into the existing model layer
-5. write tests for schema validation and raw source preservation
-6. provide a clear `README` or architecture note describing the pipeline flow
-7. do not hard-code credentials; use environment variables only
-8. keep the implementation minimal, stable, and reviewable"
+"Use commit `e7748ae` or newer as the baseline. The foundation, Maryland public ingestion, raw lineage, checkpoint/resume, PostGIS, and owner-matching foundation are complete. Finish and review the Charles County pilot report, then address its measured bottlenecks before the Prince George's County scale test. Do not build portfolio scoring from incomplete public owner data; authorized owner-name access is a separate dependency."
