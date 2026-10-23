@@ -28,10 +28,12 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       APP_ENV: local
+      DATA_ROOT: /data
     ports:
       - "8000:8000"
     volumes:
       - ./apps/api:/app
+      - ./data:/data:ro
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
   web:
