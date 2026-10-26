@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import Select, func, select, text
 from sqlalchemy.orm import Session
 
@@ -156,6 +157,93 @@ def property_facets(county: str = Query("Charles", max_length=100), db: Session 
     return {
         "postal_codes": [{"value": value, "count": count} for value, count in zip_rows],
         "property_types": [{"value": value, "count": count} for value, count in type_rows],
+    }
+
+
+@router.get("/properties/{property_id}")
+def property_detail(property_id: uuid.UUID, db: Session = Depends(get_db)) -> dict[str, object]:
+    row = db.execute(
+        select(Property, Address)
+        .outerjoin(Address, Property.address_id == Address.id)
+        .where(Property.id == property_id)
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Property not found")
+    property_record, address = row
+    identifiers = db.scalars(
+        select(ExternalIdentifier)
+        .where(ExternalIdentifier.property_id == property_id)
+        .order_by(ExternalIdentifier.source, ExternalIdentifier.source_identifier)
+    ).all()
+    assessments = db.scalars(
+        select(Assessment)
+        .where(Assessment.property_id == property_id)
+        .order_by(Assessment.assessment_year.desc().nullslast(), Assessment.observed_at.desc())
+    ).all()
+    sales = db.scalars(
+        select(Sale)
+        .where(Sale.property_id == property_id)
+        .order_by(Sale.sale_date.desc().nullslast(), Sale.observed_at.desc())
+    ).all()
+    return {
+        "id": str(property_record.id),
+        "state": property_record.state,
+        "county": property_record.county,
+        "property_type": property_record.property_type,
+        "year_built": property_record.year_built,
+        "bedrooms": property_record.bedrooms,
+        "bathrooms": property_record.bathrooms,
+        "square_feet": property_record.square_feet,
+        "is_active": property_record.is_active,
+        "address": None if address is None else {
+            "raw_address": address.raw_address,
+            "normalized_address": address.normalized_address,
+            "street_number": address.street_number,
+            "street_name": address.street_name,
+            "street_suffix": address.street_suffix,
+            "unit": address.unit,
+            "city": address.city,
+            "state": address.state,
+            "postal_code": address.postal_code,
+            "latitude": address.latitude,
+            "longitude": address.longitude,
+        },
+        "identifiers": [
+            {"source": item.source, "source_identifier": item.source_identifier}
+            for item in identifiers
+        ],
+        "assessments": [
+            {
+                "id": str(item.id),
+                "assessment_year": item.assessment_year,
+                "assessed_value": item.assessed_value,
+                "confidence": item.confidence,
+                "source": item.source,
+                "source_identifier": item.source_identifier,
+                "observed_at": item.observed_at,
+            }
+            for item in assessments
+        ],
+        "sales": [
+            {
+                "id": str(item.id),
+                "sale_date": item.sale_date,
+                "sale_price": item.sale_price,
+                "deed_type": item.deed_type,
+                "source": item.source,
+                "source_identifier": item.source_identifier,
+                "observed_at": item.observed_at,
+            }
+            for item in sales
+        ],
+        "provenance": {
+            "source": property_record.source,
+            "source_identifier": property_record.source_identifier,
+            "observed_at": property_record.observed_at,
+            "source_record_id": str(property_record.source_record_id) if property_record.source_record_id else None,
+            "created_at": property_record.created_at,
+            "updated_at": property_record.updated_at,
+        },
     }
 
 
