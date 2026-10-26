@@ -49,7 +49,7 @@ services:
     volumes:
       - ./apps/web:/app
       - /app/node_modules
-    command: sh -lc "npm install && npm run dev"
+    command: sh -lc "npm install && npm run build && npm run start"
 
 volumes:
   pgdata:
