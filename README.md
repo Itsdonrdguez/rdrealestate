@@ -60,16 +60,17 @@ Completed:
 - responsive workspace navigation and Charles County property browser
 - live system/data-health dashboard backed by sync and storage metrics
 - property profiles with characteristics, assessment and sale history, coordinates, and provenance
+- bounded PostGIS map queries with clustered, filter-aware property markers
 
 Next / blocked:
 - increase statewide storage headroom and optimize canonical upsert throughput (next)
-- add the PostGIS map with bounded and clustered property queries
+- tune map and search queries as additional counties are loaded
 - authorized Maryland owner-name data acquisition (blocks meaningful owner intelligence)
 - owner portfolio aggregation after owner-name access
 - RentCast enrichment and queueing
 - Search / filter API
 - Opportunity scoring engine
-- PostGIS map and marker summaries
+- additional map layers and spatial analysis
 - scheduled sync jobs and health monitoring
 
 ## Codex handoff plan

@@ -160,6 +160,95 @@ def property_facets(county: str = Query("Charles", max_length=100), db: Session 
     }
 
 
+@router.get("/properties/map")
+def property_map(
+    west: float = Query(..., ge=-180, le=180),
+    south: float = Query(..., ge=-90, le=90),
+    east: float = Query(..., ge=-180, le=180),
+    north: float = Query(..., ge=-90, le=90),
+    county: str | None = Query("Charles", max_length=100),
+    postal_code: str | None = Query(None, max_length=10),
+    property_type: str | None = Query(None, max_length=100),
+    query: str | None = Query(None, max_length=150),
+    min_assessed_value: int | None = Query(None, ge=0),
+    max_assessed_value: int | None = Query(None, ge=0),
+    limit: int = Query(2_500, ge=1, le=2_500),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    if west >= east or south >= north:
+        raise HTTPException(status_code=422, detail="Invalid bounding box")
+    map_assessment = (
+        select(Assessment.assessed_value)
+        .where(Assessment.property_id == Property.id)
+        .order_by(Assessment.assessment_year.desc().nullslast(), Assessment.observed_at.desc())
+        .limit(1)
+        .correlate(Property)
+        .scalar_subquery()
+    )
+    statement = (
+        select(
+            Property.id,
+            Property.property_type,
+            Property.year_built,
+            Address.normalized_address,
+            Address.city,
+            Address.postal_code,
+            Address.latitude,
+            Address.longitude,
+            ExternalIdentifier.source_identifier.label("account_id"),
+            map_assessment.label("assessment_value"),
+        )
+        .join(Address, Property.address_id == Address.id)
+        .outerjoin(ExternalIdentifier, ExternalIdentifier.property_id == Property.id)
+        .where(
+            Address.location.is_not(None),
+            func.ST_Intersects(Address.location, func.ST_MakeEnvelope(west, south, east, north, 4326)),
+        )
+    )
+    statement = _property_filters(
+        statement,
+        county=county,
+        postal_code=postal_code,
+        property_type=property_type,
+        query=query,
+        min_assessed_value=min_assessed_value,
+        max_assessed_value=max_assessed_value,
+        include_assessment_filters=False,
+    ).order_by(Property.id).limit(limit + 1)
+    if min_assessed_value is not None:
+        statement = statement.where(map_assessment >= min_assessed_value)
+    if max_assessed_value is not None:
+        statement = statement.where(map_assessment <= max_assessed_value)
+    rows = [dict(row._mapping) for row in db.execute(statement)]
+    truncated = len(rows) > limit
+    rows = rows[:limit]
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "id": str(row["id"]),
+                "geometry": {"type": "Point", "coordinates": [row["longitude"], row["latitude"]]},
+                "properties": {
+                    "id": str(row["id"]),
+                    "address": row["normalized_address"],
+                    "city": row["city"],
+                    "postal_code": row["postal_code"],
+                    "property_type": row["property_type"],
+                    "year_built": row["year_built"],
+                    "account_id": row["account_id"],
+                    "assessed_value": float(row["assessment_value"]) if row["assessment_value"] is not None else None,
+                },
+            }
+            for row in rows
+        ],
+        "count": len(rows),
+        "limit": limit,
+        "truncated": truncated,
+        "bbox": [west, south, east, north],
+    }
+
+
 @router.get("/properties/{property_id}")
 def property_detail(property_id: uuid.UUID, db: Session = Depends(get_db)) -> dict[str, object]:
     row = db.execute(
