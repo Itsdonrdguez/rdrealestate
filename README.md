@@ -37,7 +37,7 @@ The property profile should show:
 - opportunity score with explainable factors
 
 ## Current status: where we are
-The foundation and public Maryland ingestion engine are complete through baseline commit `e7748ae`. The Charles County capacity, recovery, and data-quality pilot is complete; see [the pilot report](docs/pilots/charles-county-2026-10-22.md). Accurate owner intelligence remains blocked on obtaining an authorized owner-name source.
+The foundation and public Maryland ingestion engine are complete. The Charles County capacity/recovery pilot and Prince George's scale pilot are complete; see the [Charles County report](docs/pilots/charles-county-2026-10-22.md) and [Prince George's report](docs/pilots/prince-georges-county-2026-11-08.md). Accurate owner intelligence remains blocked on obtaining an authorized owner-name source.
 
 Completed:
 - monorepo structure
@@ -57,13 +57,15 @@ Completed:
 - PostGIS property geometry
 - conservative owner-resolution fields and matching foundation
 - Charles County checkpoint/recovery and capacity benchmark
+- page-batched canonical persistence and multi-gigabyte run metrics
+- Prince George's County scale benchmark with 315,586 imported properties
 - responsive workspace navigation and Charles County property browser
 - live system/data-health dashboard backed by sync and storage metrics
 - property profiles with characteristics, assessment and sale history, coordinates, and provenance
 - bounded PostGIS map queries with clustered, filter-aware property markers
 
 Next / blocked:
-- increase statewide storage headroom and optimize canonical upsert throughput (next)
+- increase statewide storage headroom before statewide ingestion (next)
 - tune map and search queries as additional counties are loaded
 - authorized Maryland owner-name data acquisition (blocks meaningful owner intelligence)
 - owner portfolio aggregation after owner-name access
@@ -101,6 +103,9 @@ Required behavior:
 - deliberately pause and resume from a checkpoint
 - verify canonical and provenance records are not duplicated
 - project statewide runtime and storage before a scale test in Prince George's County
+- batch canonical persistence to remove per-record database lookups
+- ingest and validate all 315,586 Prince George's County records
+- verify pause/resume recovery, provenance uniqueness, and multi-gigabyte metrics
 
 ### Milestone 3
 Owner resolution + portfolio aggregation.

@@ -14,7 +14,7 @@ from .connector import ConnectorStats, MarylandSdatConnector
 from .fields import API_URL, SOURCE
 from .normalization import normalize_record
 from .raw_store import RawStore
-from .storage import store_record
+from .storage import StorageRecord, store_records
 from .validation import RecordValidationError, validate_page_schema, validate_record
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,7 @@ def run_pipeline(
     raw_store = RawStore(raw_root, run_id, resume=bool(resume_run_id), min_free_bytes=min_free_bytes)
     seen = created = updated = failed = 0
     validated_count = skipped = checkpoint_count = 0
+    database_write_seconds = 0.0
     prior_elapsed = 0.0
     prior_pages = prior_retries = prior_rate_limits = prior_server_errors = 0
     cursor: str | None = None
@@ -66,6 +67,11 @@ def run_pipeline(
         validated_count = int(checkpoint.get("validated", 0))
         skipped = int(checkpoint.get("skipped", 0))
         checkpoint_count = int(checkpoint.get("checkpoint_count", 0))
+        database_write_seconds = float(checkpoint.get("database_write_seconds", 0.0))
+        prior_pages = int(checkpoint.get("pages_fetched", checkpoint_count))
+        prior_retries = int(checkpoint.get("api_retries", 0))
+        prior_rate_limits = int(checkpoint.get("rate_limits", 0))
+        prior_server_errors = int(checkpoint.get("server_errors", 0))
         prior_elapsed = float(checkpoint.get("elapsed_seconds", 0.0))
     error_message: str | None = None
 
@@ -77,10 +83,10 @@ def run_pipeline(
         with session_factory.begin() as session:
             sync_run = session.get(SyncRun, run_uuid)
             if sync_run:
-                prior_pages = sync_run.pages_fetched
-                prior_retries = sync_run.api_retries
-                prior_rate_limits = sync_run.rate_limits
-                prior_server_errors = sync_run.server_errors
+                prior_pages = max(prior_pages, sync_run.pages_fetched)
+                prior_retries = max(prior_retries, sync_run.api_retries)
+                prior_rate_limits = max(prior_rate_limits, sync_run.rate_limits)
+                prior_server_errors = max(prior_server_errors, sync_run.server_errors)
                 sync_run.status = "running"
                 sync_run.error = None
                 sync_run.finished_at = None
@@ -105,17 +111,23 @@ def run_pipeline(
                         logger.warning("maryland_record_failed", extra={"error": str(error)})
                 if not dry_run and validated:
                     assert session_factory is not None
+                    write_started = time.monotonic()
                     with session_factory.begin() as session:
-                        for raw, normalized in validated:
-                            _, was_created = store_record(
-                                session,
-                                raw,
-                                normalized,
-                                sync_run_id=run_uuid,
-                                raw_file_path=str(page.raw_page.path),
-                            )
-                            created += int(was_created)
-                            updated += int(not was_created)
+                        storage_result, _ = store_records(
+                            session,
+                            [
+                                StorageRecord(
+                                    raw=raw,
+                                    normalized=normalized,
+                                    raw_file_path=str(page.raw_page.path),
+                                )
+                                for raw, normalized in validated
+                            ],
+                            sync_run_id=run_uuid,
+                        )
+                        created += storage_result.created
+                        updated += storage_result.updated
+                    database_write_seconds += time.monotonic() - write_started
                 raw_store.write_checkpoint(
                     {
                         "cursor": page.cursor,
@@ -127,6 +139,11 @@ def run_pipeline(
                         "validated": validated_count,
                         "skipped": skipped,
                         "checkpoint_count": checkpoint_count + 1,
+                        "database_write_seconds": database_write_seconds,
+                        "pages_fetched": prior_pages + connector.stats.pages_fetched,
+                        "api_retries": prior_retries + connector.stats.retries,
+                        "rate_limits": prior_rate_limits + connector.stats.rate_limits,
+                        "server_errors": prior_server_errors + connector.stats.server_errors,
                         "elapsed_seconds": prior_elapsed + (time.monotonic() - started),
                     }
                 )
@@ -152,6 +169,10 @@ def run_pipeline(
                 "records_per_second": seen / elapsed if elapsed else 0,
                 "bytes_per_property_raw": raw_bytes / seen if seen else 0,
                 "minimum_free_bytes": min_free_bytes,
+                "database_write_seconds": database_write_seconds,
+                "database_records_per_second": (
+                    (created + updated) / database_write_seconds if database_write_seconds else 0
+                ),
             }
             with session_factory.begin() as session:
                 persisted = session.get(SyncRun, run_uuid)
@@ -200,5 +221,9 @@ def run_pipeline(
         "checkpoint_count": checkpoint_count,
         "elapsed_seconds": elapsed,
         "records_per_second": seen / elapsed if elapsed else 0,
+        "database_write_seconds": database_write_seconds,
+        "database_records_per_second": (
+            (created + updated) / database_write_seconds if database_write_seconds else 0
+        ),
     }
     return PipelineResult(run_id, seen, created, updated, failed, raw_store.directory, result_metrics)

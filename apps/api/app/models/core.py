@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func
 from geoalchemy2 import Geometry
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -190,7 +190,7 @@ class SyncRun(Base, TimestampMixin):
     api_retries: Mapped[int] = mapped_column(default=0, nullable=False)
     rate_limits: Mapped[int] = mapped_column(default=0, nullable=False)
     server_errors: Mapped[int] = mapped_column(default=0, nullable=False)
-    raw_bytes: Mapped[int] = mapped_column(default=0, nullable=False)
+    raw_bytes: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     checkpoint_count: Mapped[int] = mapped_column(default=0, nullable=False)
     elapsed_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     metrics: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)

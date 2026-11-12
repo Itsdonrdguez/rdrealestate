@@ -110,6 +110,8 @@ def test_controlled_pause_records_checkpoint_metrics(tmp_path, maryland_record: 
     assert result.metrics["status"] == "paused"
     assert result.metrics["pages_fetched"] == 1
     assert checkpoint["checkpoint_count"] == 1
+    assert checkpoint["pages_fetched"] == 1
+    assert checkpoint["api_retries"] == 0
 
 
 def test_connector_counts_recoverable_server_retry(tmp_path, maryland_record: dict[str, object], monkeypatch) -> None:

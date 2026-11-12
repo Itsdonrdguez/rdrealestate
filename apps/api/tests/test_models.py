@@ -1,9 +1,9 @@
 from decimal import Decimal
 
-from sqlalchemy import Numeric, UniqueConstraint
+from sqlalchemy import BigInteger, Numeric, UniqueConstraint
 
 from app.db.base import Base
-from app.models import Address, Assessment, ExternalIdentifier, Owner, Property, PropertyOwnership, Sale, SourceRecord
+from app.models import Address, Assessment, ExternalIdentifier, Owner, Property, PropertyOwnership, Sale, SourceRecord, SyncRun
 
 
 def test_foundational_tables_are_registered() -> None:
@@ -66,3 +66,7 @@ def test_source_identity_constraints_prevent_duplicates() -> None:
             if isinstance(constraint, UniqueConstraint)
         }
         assert expected in names
+
+
+def test_sync_run_raw_bytes_supports_multi_gigabyte_snapshots() -> None:
+    assert isinstance(SyncRun.raw_bytes.type, BigInteger)
