@@ -214,6 +214,17 @@ Then open:
 - Web: http://localhost:3000
 - PostgreSQL: localhost:5433
 
+### Optional Street View imagery
+
+Property profiles can request Google Street View imagery on demand without saving image files locally. To enable it:
+
+1. Enable the Street View Static API in a Google Cloud project with billing.
+2. Create a browser API key restricted to the Street View Static API.
+3. Restrict the key's website referrers to the addresses that run this app, including `http://localhost:3000/*` for local use.
+4. Set `NEXT_PUBLIC_GOOGLE_STREET_VIEW_API_KEY` in `.env`, then rebuild the web app.
+
+The key is intentionally browser-visible, so API and referrer restrictions are required. When the variable is empty, the property profile displays its coordinate placeholder and makes no Street View request.
+
 To stop the stack:
 - [stop-local.bat](stop-local.bat)
 
@@ -234,6 +245,30 @@ For a fast local start on Windows:
 2. Double-click [start-local.bat](start-local.bat).
 3. The app opens at http://localhost:3000.
 4. The API health check opens at http://localhost:8000/health.
+
+## Restore from a fresh computer
+
+The GitHub repository contains the application and ingestion code, but intentionally excludes credentials, PostgreSQL data, generated raw source snapshots, dependencies, and build output.
+
+```powershell
+git clone https://github.com/Itsdonrdguez/rdrealestate.git
+cd rdrealestate
+Copy-Item .env.example .env
+```
+
+Replace the placeholder secrets in `.env`, ensure Docker Desktop is running, and then double-click `start-local.bat` or run:
+
+```powershell
+docker compose up --build
+```
+
+This creates a clean database. To rebuild public Maryland property data, first verify available disk space and run a small dry run:
+
+```powershell
+python -m pipelines.maryland.cli --dry-run --limit 10
+```
+
+Then use the county ingestion workflow documented in [pipelines/maryland/README.md](pipelines/maryland/README.md). Restoring the exact database state requires a separately preserved PostgreSQL backup; it is not stored in GitHub.
 
 ## Copilot / Codex handoff prompt
 Use this as the next prompt for the next coding session:

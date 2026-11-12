@@ -24,6 +24,7 @@ export default function PropertyDetail() {
   const { id } = useParams<{ id: string }>();
   const [property, setProperty] = useState<PropertyDetailData | null>(null);
   const [error, setError] = useState('');
+  const [streetImageFailed, setStreetImageFailed] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     apiFetch<PropertyDetailData>(`/api/properties/${id}`, controller.signal).then(setProperty).catch((reason) => {
@@ -39,6 +40,13 @@ export default function PropertyDetail() {
   const latestSale = property.sales[0];
   const accountId = property.identifiers[0]?.source_identifier ?? property.provenance.source_identifier;
   const address = property.address?.normalized_address ?? property.address?.raw_address ?? 'Address unavailable';
+  const streetViewKey = process.env.NEXT_PUBLIC_GOOGLE_STREET_VIEW_API_KEY;
+  const streetViewLocation = property.address?.latitude != null && property.address?.longitude != null
+    ? `${property.address.latitude},${property.address.longitude}`
+    : [address, property.address?.city, property.address?.state ?? property.state, property.address?.postal_code].filter(Boolean).join(', ');
+  const streetViewUrl = streetViewKey && streetViewLocation
+    ? `https://maps.googleapis.com/maps/api/streetview?size=640x480&location=${encodeURIComponent(streetViewLocation)}&fov=85&pitch=0&key=${encodeURIComponent(streetViewKey)}`
+    : null;
   return <main className="page property-detail-page">
     <div className="detail-breadcrumb"><Link href="/properties">Property search</Link><span>/</span><span>{accountId}</span></div>
     <header className="detail-header">
@@ -58,7 +66,12 @@ export default function PropertyDetail() {
         <section className="detail-section"><div className="section-heading"><div><span>Transaction history</span><h2>Recorded sales</h2></div><small>{property.sales.length} record{property.sales.length === 1 ? '' : 's'}</small></div>{property.sales.length ? <div className="history-table"><div className="history-head"><span>Sale date</span><span>Sale price</span><span>Deed type</span><span>Source</span></div>{property.sales.map((item) => <div className="history-row" key={item.id}><strong>{date(item.sale_date)}</strong><span>{item.sale_price ? money.format(Number(item.sale_price)) : 'Not available'}</span><span>{value(item.deed_type)}</span><code>{item.source}</code></div>)}</div> : <p className="no-data">No qualifying sale history is available for this property.</p>}</section>
       </div>
       <aside className="detail-aside">
-        <section className="location-card"><div className="location-grid"/><span className="location-pin"/><div><small>Recorded coordinates</small><strong>{property.address?.latitude && property.address?.longitude ? `${property.address.latitude.toFixed(5)}, ${property.address.longitude.toFixed(5)}` : 'Not available'}</strong><p>A full interactive PostGIS map is planned for the next frontend phase.</p></div></section>
+        <section className={`location-card ${streetViewUrl && !streetImageFailed ? 'has-street-image' : ''}`}>
+          {streetViewUrl && !streetImageFailed
+            ? <img className="street-image" src={streetViewUrl} alt={`Street view near ${address}`} loading="lazy" onError={() => setStreetImageFailed(true)} />
+            : <><div className="location-grid"/><span className="location-pin"/></>}
+          <div><small>{streetViewUrl && !streetImageFailed ? 'Google Street View' : 'Recorded coordinates'}</small><strong>{property.address?.latitude != null && property.address?.longitude != null ? `${property.address.latitude.toFixed(5)}, ${property.address.longitude.toFixed(5)}` : address}</strong><p>{streetViewUrl && !streetImageFailed ? 'Remote street imagery shown on demand. No image file is stored by this application.' : 'Street imagery appears here when the Google Street View API is configured.'}</p></div>
+        </section>
         <section className="aside-card"><div className="section-heading"><div><span>Source evidence</span><h2>Provenance</h2></div></div><dl className="provenance-list"><div><dt>Source</dt><dd>{property.provenance.source}</dd></div><div><dt>Source identifier</dt><dd><code>{property.provenance.source_identifier}</code></dd></div><div><dt>Observed</dt><dd>{date(property.provenance.observed_at)}</dd></div><div><dt>Raw source record</dt><dd><code>{property.provenance.source_record_id ?? 'Not available'}</code></dd></div><div><dt>Canonical property ID</dt><dd><code>{property.id}</code></dd></div></dl></section>
         <section className="owner-pending"><span>Owner intelligence</span><h3>Awaiting authorized data</h3><p>Ownership, mailing address, absentee status, and portfolio analysis will appear here after the licensed owner-name source is connected.</p></section>
       </aside>
