@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
             <div className="source-card">
               <span className="status-dot" />
-              <div><strong>Maryland public data</strong><small>Charles County loaded</small></div>
+              <div><strong>Maryland public data</strong><small>Two counties loaded</small></div>
             </div>
           </aside>
           <div className="app-content">
